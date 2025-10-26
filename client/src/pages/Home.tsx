@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { TripForm } from "@/components/TripForm";
 import { Timeline } from "@/components/Timeline";
 import { TravelMap } from "@/components/TravelMap";
@@ -34,16 +34,56 @@ export default function Home() {
 
       const data = await response.json();
       setItinerary(data);
+      // Save to itineraries list in localStorage (most-recent-first)
+      try {
+        const raw = localStorage.getItem("itineraries");
+        const arr: Itinerary[] = raw ? JSON.parse(raw) : [];
+        const deduped = arr.filter(a => a.id !== data.id);
+        localStorage.setItem("itineraries", JSON.stringify([data, ...deduped]));
+      } catch (e) {
+        /* ignore */
+      }
     } catch (err: any) {
       console.error("Error generating itinerary:", err);
       setError(err.message || "Failed to generate itinerary");
       // Fall back to mock data on error
       const mockItinerary = generateMockItinerary(location, startDate, endDate);
       setItinerary(mockItinerary);
+      try {
+        const raw = localStorage.getItem("itineraries");
+        const arr: Itinerary[] = raw ? JSON.parse(raw) : [];
+        const deduped = arr.filter(a => a.id !== mockItinerary.id);
+        localStorage.setItem("itineraries", JSON.stringify([mockItinerary, ...deduped]));
+      } catch (e) { /* ignore */ }
     } finally {
       setIsLoading(false);
     }
   };
+
+  // Ensure the default itinerary is present in the stored itineraries list on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("itineraries");
+      const arr: Itinerary[] = raw ? JSON.parse(raw) : [];
+      if ((!arr || arr.length === 0) && itinerary) {
+        // If we have a single legacy 'itinerary' key, migrate it into 'itineraries'
+        const legacy = localStorage.getItem("itinerary");
+        if (legacy) {
+          try {
+            const leg = JSON.parse(legacy) as Itinerary;
+            const merged = [leg, itinerary];
+            localStorage.setItem("itineraries", JSON.stringify(merged));
+          } catch {
+            localStorage.setItem("itineraries", JSON.stringify([itinerary]));
+          }
+        } else {
+          localStorage.setItem("itineraries", JSON.stringify([itinerary]));
+        }
+      }
+    } catch (e) {
+      console.error("Failed to initialize itineraries", e);
+    }
+  }, []);
 
   const hoveredEvent = hoveredEventId 
     ? itinerary?.events.find(e => e.id === hoveredEventId) 
