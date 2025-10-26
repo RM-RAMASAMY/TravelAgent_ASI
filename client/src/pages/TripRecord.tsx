@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import type { Itinerary } from "@shared/schema";
 
 function EventRow({ event }: { event: Itinerary["events"][number] }) {
@@ -52,6 +52,9 @@ export default function TripRecord() {
   }, []);
 
   const openTrip = (t: Itinerary) => {
+    // remember the element that opened the dialog so we can restore focus later
+    lastFocusedRef.current = document.activeElement as HTMLElement | null;
+
     setSelected(t);
     // small timeout to ensure the selected is set before opening for smoother animation
     requestAnimationFrame(() => setOpen(true));
@@ -60,8 +63,20 @@ export default function TripRecord() {
   const closePanel = () => {
     setOpen(false);
     // clear selected after animation completes
-    setTimeout(() => setSelected(null), 300);
+    setTimeout(() => {
+      setSelected(null);
+      // restore focus to the element that opened the panel
+      try {
+        lastFocusedRef.current?.focus();
+      } catch (e) {
+        // ignore focus errors
+      }
+    }, 300);
   };
+
+  const lastFocusedRef = useRef<HTMLElement | null>(null);
+  const dialogRef = useRef<HTMLElement | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
 
   return (
     <div className="h-full min-h-screen bg-background">
@@ -95,13 +110,19 @@ export default function TripRecord() {
       />
 
       <aside
+        ref={dialogRef}
         className={`fixed top-0 right-0 h-full w-[420px] max-w-full bg-card/95 shadow-2xl border-l border-border transform transition-transform duration-300 ease-in-out ${open ? "translate-x-0" : "translate-x-full"}`}
         role="dialog"
+        aria-modal={open}
         aria-labelledby="itinerary-title"
+        tabIndex={-1}
+        onKeyDown={(e) => {
+          // onKeyDown is kept minimal: main handling is in window listener for Escape/Tab
+        }}
       >
         <div className="p-4 flex items-center justify-between border-b border-border">
           <h2 id="itinerary-title" className="text-lg font-semibold">Itinerary</h2>
-          <button onClick={closePanel} className="text-sm text-muted-foreground px-2 py-1 hover:bg-muted rounded">
+          <button ref={closeButtonRef} onClick={closePanel} className="text-sm text-muted-foreground px-2 py-1 hover:bg-muted rounded">
             Close
           </button>
         </div>
@@ -125,6 +146,85 @@ export default function TripRecord() {
           )}
         </div>
       </aside>
+
+      {/* Accessibility behavior: focus management & escape/tab handling */}
+      {/**
+       * Manage Escape to close and simple focus-trap while the panel is open.
+       * We attach a window keydown listener when open — it will handle:
+       * - Escape to close
+       * - Tab cycling within the dialog
+       */}
+      <FocusManager open={open} dialogRef={dialogRef} closePanel={closePanel} closeButtonRef={closeButtonRef} />
     </div>
   );
+}
+
+// Small helper component (kept inside file) to manage global key events and focus trapping.
+function FocusManager({
+  open,
+  dialogRef,
+  closePanel,
+  closeButtonRef,
+}: {
+  open: boolean;
+  dialogRef: React.RefObject<HTMLElement | null>;
+  closePanel: () => void;
+  closeButtonRef: React.RefObject<HTMLButtonElement | null>;
+}) {
+  useEffect(() => {
+    if (!open) return;
+
+    // Focus the close button shortly after opening for better UX
+    const focusTimer = setTimeout(() => {
+      try {
+        closeButtonRef.current?.focus();
+      } catch (e) {
+        // ignore
+      }
+    }, 50);
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (!open) return;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closePanel();
+        return;
+      }
+
+      if (e.key === "Tab") {
+        const dialog = dialogRef.current;
+        if (!dialog) return;
+        const focusable = Array.from(
+          dialog.querySelectorAll<HTMLElement>(
+            'a[href], area[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), iframe, object, embed, [tabindex]:not([tabindex="-1"])',
+          ),
+        ).filter((el) => el.offsetParent !== null);
+
+        if (focusable.length === 0) {
+          e.preventDefault();
+          return;
+        }
+
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        const active = document.activeElement as HTMLElement | null;
+
+        if (e.shiftKey && active === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && active === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      clearTimeout(focusTimer);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open, dialogRef, closePanel, closeButtonRef]);
+
+  return null;
 }
