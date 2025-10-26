@@ -302,26 +302,23 @@ export function TravelMap({ events, hoveredEvent }: TravelMapProps) {
         
         {events.map((event, index) => {
           const isHovered = hoveredEvent?.id === event.id;
+
+          // build icon per state and pass it to Marker prop (avoid ref DOM changes)
+          const markerIcon = L.icon({
+            iconUrl: isHovered ? baseRedSvg : baseBlueSvg,
+            iconSize: [32, 48],
+            iconAnchor: [16, 48],
+            popupAnchor: [1, -42],
+            shadowSize: [48, 48],
+            className: 'marker-no-glow'
+          });
+
           return (
             <Marker
               key={event.id}
               position={event.coordinates}
-              // Always use the base icon; toggle the 'highlighted-marker' CSS class on the DOM element
-              icon={icon}
+              icon={markerIcon}
               zIndexOffset={isHovered ? 1000 : 0}
-              ref={(markerRef: any) => {
-                if (!markerRef) return;
-                const el = markerRef.getElement?.();
-                if (!el) return;
-                // Try direct <img> swap — more reliable than swapping icon objects in some browsers
-                const img = el.querySelector?.('img') as HTMLImageElement | null;
-                if (img) {
-                  img.src = isHovered ? baseRedSvg : baseBlueSvg;
-                }
-                // Also toggle class for scale/pulse effect
-                if (isHovered) el.classList.add('highlighted-marker');
-                else el.classList.remove('highlighted-marker');
-              }}
             >
               <Popup className="custom-popup">
                 <div className="p-3 min-w-[220px] scale-in">
