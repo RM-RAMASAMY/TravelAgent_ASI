@@ -9,8 +9,12 @@ export default function FloatingUserButton({ onClick }: Props) {
   const [location, setLocation] = useLocation();
 
   const isTripPage = location === "/trip";
+  const isVoicePage = location === "/";
 
-  const handleClick = onClick ?? (() => setLocation(isTripPage ? "/" : "/trip"));
+  // Don't show on voice agent page
+  if (isVoicePage) return null;
+
+  const handleClick = onClick ?? (() => setLocation(isTripPage ? "/home" : "/trip"));
 
   return (
     <button

@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import FloatingUserButton from "@/components/ui/floating-user-button";
 import { AnimatePresence, motion } from "framer-motion";
+import VoiceAgent from "@/pages/VoiceAgent";
 import Home from "@/pages/Home";
 import NotFound from "@/pages/not-found";
 import TripRecord from "@/pages/TripRecord";
@@ -12,7 +13,8 @@ import TripRecord from "@/pages/TripRecord";
 function Router({ path }: { path: string }) {
   // Render the active route directly so the App can wrap it in an absolute-positioned
   // motion layer. This prevents a blank frame from appearing between unmount/mount.
-  if (path === "/") return <Home />;
+  if (path === "/") return <VoiceAgent />;
+  if (path === "/home") return <Home />;
   if (path === "/trip") return <TripRecord />;
   return <NotFound />;
 }

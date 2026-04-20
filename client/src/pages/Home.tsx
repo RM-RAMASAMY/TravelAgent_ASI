@@ -7,10 +7,23 @@ import { generateMockItinerary } from "@/lib/mockData";
 import type { Itinerary } from "@shared/schema";
 
 export default function Home() {
-  // Initialize with a default itinerary (Paris trip)
-  const [itinerary, setItinerary] = useState<Itinerary | null>(() => 
-    generateMockItinerary("Paris", "2025-11-01", "2025-11-05")
-  );
+  // Initialize by checking localStorage first, then fall back to default
+  const [itinerary, setItinerary] = useState<Itinerary | null>(() => {
+    try {
+      const raw = localStorage.getItem("itineraries");
+      const arr: Itinerary[] = raw ? JSON.parse(raw) : [];
+      // Return the most recent itinerary if available
+      if (arr.length > 0) {
+        console.log("📍 Loading most recent itinerary from localStorage:", arr[0]);
+        return arr[0];
+      }
+    } catch (e) {
+      console.error("Failed to load itinerary from localStorage:", e);
+    }
+    // Fall back to default Paris itinerary
+    console.log("📍 No saved itinerary, using default Paris trip");
+    return generateMockItinerary("Paris", "2025-11-01", "2025-11-05");
+  });
   const [hoveredEventId, setHoveredEventId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,27 +75,47 @@ export default function Home() {
 
   // Ensure the default itinerary is present in the stored itineraries list on mount
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem("itineraries");
-      const arr: Itinerary[] = raw ? JSON.parse(raw) : [];
-      if ((!arr || arr.length === 0) && itinerary) {
-        // If we have a single legacy 'itinerary' key, migrate it into 'itineraries'
-        const legacy = localStorage.getItem("itinerary");
-        if (legacy) {
-          try {
-            const leg = JSON.parse(legacy) as Itinerary;
-            const merged = [leg, itinerary];
-            localStorage.setItem("itineraries", JSON.stringify(merged));
-          } catch {
-            localStorage.setItem("itineraries", JSON.stringify([itinerary]));
-          }
-        } else {
+    // Check localStorage for the most recent itinerary
+    const loadLatestItinerary = () => {
+      try {
+        const raw = localStorage.getItem("itineraries");
+        const arr: Itinerary[] = raw ? JSON.parse(raw) : [];
+        if (arr.length > 0) {
+          console.log("🔄 Loading latest itinerary:", arr[0].location);
+          setItinerary(arr[0]);
+        } else if (itinerary) {
+          // Save current itinerary if none exist
           localStorage.setItem("itineraries", JSON.stringify([itinerary]));
         }
+      } catch (e) {
+        console.error("Failed to initialize itineraries", e);
       }
-    } catch (e) {
-      console.error("Failed to initialize itineraries", e);
-    }
+    };
+
+    loadLatestItinerary();
+
+    // Listen for storage events (when another tab/component updates localStorage)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "itineraries") {
+        console.log("🔄 Storage changed, reloading itinerary...");
+        loadLatestItinerary();
+      }
+    };
+
+    // Listen for custom itinerary update event (same tab)
+    const handleItineraryUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      console.log("🎉 New itinerary received:", customEvent.detail);
+      setItinerary(customEvent.detail);
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    window.addEventListener("itineraryUpdated", handleItineraryUpdate);
+
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("itineraryUpdated", handleItineraryUpdate);
+    };
   }, []);
 
   const hoveredEvent = hoveredEventId 
